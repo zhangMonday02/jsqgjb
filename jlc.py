@@ -9,19 +9,18 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver import ActionChains
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+# Note: DesiredCapabilities is deprecated in Selenium 4.10+, 
+# logic moved to options.set_capability within the script.
 
 def log(msg):
     full_msg = f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
     print(full_msg, flush=True)
 
-
 def with_retry(func, max_retries=5, delay=1):
     """如果函数返回None或抛出异常，静默重试"""
-
     def wrapper(*args, **kwargs):
         for attempt in range(max_retries):
             try:
@@ -32,9 +31,7 @@ def with_retry(func, max_retries=5, delay=1):
             except Exception:
                 time.sleep(delay + random.uniform(0, 1))  # 随机延迟
         return None
-
     return wrapper
-
 
 @with_retry
 def extract_token_from_local_storage(driver):
@@ -47,7 +44,7 @@ def extract_token_from_local_storage(driver):
         else:
             alternative_keys = [
                 "x-jlc-accesstoken",
-                "accessToken",
+                "accessToken", 
                 "token",
                 "jlc-token"
             ]
@@ -58,68 +55,66 @@ def extract_token_from_local_storage(driver):
                     return token
     except Exception as e:
         log(f"❌ 从 localStorage 提取 token 失败: {e}")
-
+    
     return None
-
 
 @with_retry
 def extract_secretkey_from_devtools(driver):
     """使用 DevTools 从网络请求中提取 secretkey"""
     secretkey = None
-
+    
     try:
         logs = driver.get_log('performance')
-
+        
         for entry in logs:
             try:
                 message = json.loads(entry['message'])
                 message_type = message.get('message', {}).get('method', '')
-
+                
                 if message_type == 'Network.requestWillBeSent':
                     request = message.get('message', {}).get('params', {}).get('request', {})
                     url = request.get('url', '')
-
+                    
                     if 'm.jlc.com' in url:
                         headers = request.get('headers', {})
                         secretkey = (
-                            headers.get('secretkey') or
+                            headers.get('secretkey') or 
                             headers.get('SecretKey') or
                             headers.get('secretKey') or
                             headers.get('SECRETKEY')
                         )
-
+                        
                         if secretkey:
                             log(f"✅ 从请求中提取到 secretkey: {secretkey[:20]}...")
                             return secretkey
-
+                
                 elif message_type == 'Network.responseReceived':
                     response = message.get('message', {}).get('params', {}).get('response', {})
                     url = response.get('url', '')
-
+                    
                     if 'm.jlc.com' in url:
                         headers = response.get('requestHeaders', {})
                         secretkey = (
-                            headers.get('secretkey') or
+                            headers.get('secretkey') or 
                             headers.get('SecretKey') or
                             headers.get('secretKey') or
                             headers.get('SECRETKEY')
                         )
-
+                        
                         if secretkey:
                             log(f"✅ 从响应中提取到 secretkey: {secretkey[:20]}...")
                             return secretkey
-
+                            
             except:
                 continue
-
+                
     except Exception as e:
         log(f"❌ DevTools 提取 secretkey 出错: {e}")
-
-    return None
-
+    
+    return secretkey
 
 def get_chrome_options():
-    """统一生成 Chrome 配置"""
+    """统一获取 Chrome 配置，兼容 Selenium 4.10+"""
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -131,24 +126,24 @@ def get_chrome_options():
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
     
-    # 新版 Selenium 设置日志的方式
+    # Selenium 4+ 方式开启日志
     chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL', 'browser': 'ALL'})
     
     return chrome_options
-
 
 def ensure_login_page(driver):
     """确保进入登录页面，如果未检测到登录页面则重启浏览器"""
     max_restarts = 5
     restarts = 0
-
+    
     while restarts < max_restarts:
         try:
             driver.get("https://passport.jlc.com/login?appId=JLC_PORTAL_PC&redirectUrl=https%3A%2F%2Fwww.jlc.com%2F&bizExtendedParam=%7B%22jlcGroup_source%22%3A%22jlc%22%7D")
             log("已打开 JLC 登录页")
-
+            
             WebDriverWait(driver, 10).until(lambda d: "passport.jlc.com/login" in d.current_url)
             current_url = driver.current_url
+
             # 检查是否在登录页面
             if "passport.jlc.com/login" in current_url:
                 log("✅ 检测到登录页面")
@@ -157,22 +152,19 @@ def ensure_login_page(driver):
                 restarts += 1
                 if restarts < max_restarts:
                     # 静默重启浏览器
-                    try:
-                        driver.quit()
-                    except:
-                        pass
-
+                    driver.quit()
+                    
                     # 重新初始化浏览器
-                    chrome_options = get_chrome_options()
-                    driver = webdriver.Chrome(options=chrome_options) # 修复点：移除了 desired_capabilities
+                    options = get_chrome_options()
+                    driver = webdriver.Chrome(options=options)
                     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
+                    
                     # 静默等待后继续循环
                     time.sleep(2)
                 else:
                     log(f"❌ 重启浏览器{max_restarts}次后仍无法进入登录页面")
                     return False
-
+                    
         except Exception as e:
             restarts += 1
             if restarts < max_restarts:
@@ -180,19 +172,18 @@ def ensure_login_page(driver):
                     driver.quit()
                 except:
                     pass
-
+                
                 # 重新初始化浏览器
-                chrome_options = get_chrome_options()
-                driver = webdriver.Chrome(options=chrome_options) # 修复点：移除了 desired_capabilities
+                options = get_chrome_options()
+                driver = webdriver.Chrome(options=options)
                 driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
+                
                 time.sleep(2)
             else:
                 log(f"❌ 重启浏览器{max_restarts}次后仍出现异常: {e}")
                 return False
-
+    
     return False
-
 
 def check_password_error(driver):
     """检查页面是否显示密码错误提示"""
@@ -208,7 +199,7 @@ def check_password_error(driver):
             "//*[contains(@class, 'toast')]",
             "//*[contains(@class, 'message')]"
         ]
-
+        
         for selector in error_selectors:
             try:
                 # 使用短暂的等待来检查错误提示
@@ -222,21 +213,22 @@ def check_password_error(driver):
                         return True
             except:
                 continue
-
+                
         return False
     except Exception as e:
         log(f"⚠ 检查密码错误时出现异常: {e}")
         return False
 
-
 def perform_login(driver, username, password):
     wait = WebDriverWait(driver, 25)
-
+    
     # 确保进入登录页面
     if not ensure_login_page(driver):
         return False
+
     # 登录流程
     log("检测到登录页面，正在执行登录流程...")
+
     try:
         phone_btn = wait.until(
             EC.element_to_be_clickable((By.XPATH, '//button[contains(text(),"账号登录")]'))
@@ -246,6 +238,7 @@ def perform_login(driver, username, password):
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//input[@placeholder="请输入手机号码 / 客户编号 / 邮箱"]')))
     except Exception as e:
         log(f"账号登录按钮可能已默认选中: {e}")
+
     # 输入账号密码
     try:
         user_input = wait.until(
@@ -253,6 +246,7 @@ def perform_login(driver, username, password):
         )
         user_input.clear()
         user_input.send_keys(username)
+
         pwd_input = wait.until(
             EC.presence_of_element_located((By.XPATH, '//input[@type="password"]'))
         )
@@ -262,6 +256,7 @@ def perform_login(driver, username, password):
     except Exception as e:
         log(f"❌ 登录输入框未找到: {e}")
         return False
+
     # 点击登录
     try:
         login_btn = wait.until(
@@ -272,135 +267,143 @@ def perform_login(driver, username, password):
     except Exception as e:
         log(f"❌ 登录按钮定位失败: {e}")
         return False
+
     # 立即检查密码错误提示（点击登录按钮后）
     time.sleep(1)  # 给错误提示一点时间显示
     if check_password_error(driver):
         return False
+
     # 处理滑块验证
     try:
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".btn_slide")))
         slider = wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn_slide"))
         )
-
+        
         track = wait.until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".nc_scale"))
         )
-
+        
         track_width = track.size['width']
         slider_width = slider.size['width']
         move_distance = track_width - slider_width - 10
-
+        
         log(f"检测到滑块验证码，滑动距离: {move_distance}px")
-
+        
         actions = ActionChains(driver)
         actions.click_and_hold(slider).perform()
         time.sleep(0.5)
-
+        
         quick_distance = int(move_distance * random.uniform(0.6, 0.8))
         slow_distance = move_distance - quick_distance
-
+        
         y_offset1 = random.randint(-2, 2)
         actions.move_by_offset(quick_distance, y_offset1).perform()
         time.sleep(random.uniform(0.1, 0.3))
-
+        
         y_offset2 = random.randint(-2, 2)
         actions.move_by_offset(slow_distance, y_offset2).perform()
         time.sleep(random.uniform(0.05, 0.15))
-
+        
         actions.release().perform()
         log("滑块拖动完成")
-
+        
         # 滑块验证后立即检查密码错误提示
         time.sleep(1)  # 给错误提示一点时间显示
         if check_password_error(driver):
             return False
-
+            
         WebDriverWait(driver, 10).until(lambda d: "www.jlc.com" in d.current_url and "passport.jlc.com" not in d.current_url)
-
+        
     except Exception as e:
         log(f"滑块验证处理: {e}")
         # 滑块验证失败后检查密码错误
         time.sleep(1)
         if check_password_error(driver):
             return False
+
     # 等待跳转
     log("等待登录跳转...")
     max_wait = 15
     jumped = False
     for i in range(max_wait):
         current_url = driver.current_url
-
+        
         # 检查是否成功跳转回首页
         if "www.jlc.com" in current_url and "passport.jlc.com" not in current_url:
             log("成功跳转回首页")
             jumped = True
             break
-
+        
         time.sleep(1)
-
+    
     if not jumped:
         current_title = driver.title
         log(f"❌ 跳转超时，当前页面标题: {current_title}")
         return False
+
     return True
 
-
 def main():
-    # 1. 修改参数接收逻辑，增加 sku 和 activity_id
     if len(sys.argv) < 5:
         print("用法: python jlc.py 账号 密码 SKU 活动ID")
         print("示例: python jlc.py user1 pwd1 SKU123 ActivityID456")
         sys.exit(1)
-
+    
     username = sys.argv[1].strip()
     password = sys.argv[2].strip()
-    target_sku = sys.argv[3].strip()      # 新增：接收 SKU
-    activity_id = sys.argv[4].strip()     # 新增：接收 ActivityID
-
-    log(f"🚀 启动任务 | 账号: {username} | 目标SKU: {target_sku}")
-
-    # 修复点：使用 get_chrome_options 获取配置，并正确初始化 Driver
-    chrome_options = get_chrome_options()
-    driver = webdriver.Chrome(options=chrome_options)
+    target_sku = sys.argv[3].strip()
+    activity_id = sys.argv[4].strip()
     
+    log(f"🚀 启动任务 | 账号: {username} | 目标SKU: {target_sku}")
+    
+    # 兼容 Selenium 4.10+ 的初始化
+    options = get_chrome_options()
+    driver = webdriver.Chrome(options=options)
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
+    
     try:
         if not perform_login(driver, username, password):
             log("❌ 登录失败，程序退出")
             sys.exit(1)
-
+        
         # 跳转到指定页面
         driver.get("https://www.jlc.com/portal/anniversary-doubleActivity")
         log("已跳转到 https://www.jlc.com/portal/anniversary-doubleActivity")
         WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
         log("页面加载完毕")
-
-        # 2. 修改 JS 脚本注入逻辑，使用 .replace 动态替换配置
+        
+        # 准备 JS 脚本模板
         raw_js_script = """
 (function() {
 'use strict';
+
 // ================= 配置区域 =================  
 const CONFIG = {  
     // 必填项：活动/分类ID  
     activityAccessId: "REPLACE_ACTIVITY_ID",   
+
     // 目标商品的 SKU Code  
     targetSku: "REPLACE_TARGET_SKU",   
+
     // 并发突发请求数量：在开抢时，脚本会立即发送这个数量的请求。  
     // 就30吧，立创服务器太拉了，太多别给他干爆了  
     BURST_COUNT: 30,   
+
     // 提前多少毫秒开始预热请求 (Lead Time)  
     leadTime: 300  
 };  
+
 // 接口地址  
 const URLS = {  
     list: "/api/integral/seckill/ns/getSeckillGoods",  
     buy: "/api/integral/seckill/exchangeSeckillGoods"  
 };  
+
 console.log(`%c 🚀 嘉立创秒杀脚本 By zhangMonday 已加载 [目标SKU: ${CONFIG.targetSku}]`, "background: #222; color: #00ff00; font-size:14px;");  
 console.log(`🔑 已使用活动 ID: ${CONFIG.activityAccessId}`);  
 console.log(`🔥 轰炸数量: ${CONFIG.BURST_COUNT} 次`);  
+
 // ================= 通用请求函数 =================  
 async function fetchJson(url, data) {  
     try {  
@@ -415,17 +418,21 @@ async function fetchJson(url, data) {
         return { error: true, message: e.message };  
     }  
 }  
+
 // ================= 调试/自检功能 (checkSystem) =================  
 async function checkSystem() {  
     console.log("%c 🔍 开始系统自检...", "font-weight:bold; font-size:16px; color: #1890ff;");  
+
     // [1/3] 列表  
     console.log("%c[1/3] 正在请求商品列表...", "color: gray");  
     const listPayload = { categoryAccessId: CONFIG.activityAccessId };  
     const listRes = await fetchJson(URLS.list, listPayload);  
     console.log("📄 列表接口返回:", listRes);  
+
     if (!listRes.data || !listRes.data.seckillGoodsResponseVos) {  
         throw new Error("❌ 列表获取失败，请检查 activityAccessId 或登录状态");  
     }  
+
     // [2/3] 验证 SKU  
     const target = listRes.data.seckillGoodsResponseVos.find(item => item.skuCode === CONFIG.targetSku);  
     if (!target) {  
@@ -441,8 +448,10 @@ async function checkSystem() {
         "source": 4  
     };  
     console.log("📦 发送的抢购请求体:", buyPayload);  
+
     const buyRes = await fetchJson(URLS.buy, buyPayload);  
     console.log("📡 抢购接口返回:", buyRes);  
+
     if (buyRes.code === 200 && buyRes.success) {  
         console.log("%c 🎉 我操居然抢购成功了！", "color: red; font-weight:bold");  
     } else {  
@@ -450,6 +459,7 @@ async function checkSystem() {
         console.log("%c ✅ 接口链路通畅，Payload 格式已确认无误。", "color: green; font-weight:bold");  
     }  
 }  
+
 // ================= 核心执行函数 (执行抢购) =================  
 // 此函数现在返回 Promise，用于并发调用  
 function executeSeckill(goodsDetailAccessId) {  
@@ -458,6 +468,7 @@ function executeSeckill(goodsDetailAccessId) {
         "categoryAccessId": CONFIG.activityAccessId,  
         "source": 4  
     };  
+
     // 仅在第一次打印 payload 确认  
     if(!window.hasLoggedPayload) {  
         console.log("💣 准备发送的最终 Payload:", JSON.stringify(payload));  
@@ -466,6 +477,7 @@ function executeSeckill(goodsDetailAccessId) {
       
     return fetchJson(URLS.buy, payload);  
 }  
+
 // ================= 正式抢购流程=================  
 async function startJLCSeckill() {  
     console.log("🚀 启动正式抢购流程...");  
@@ -481,22 +493,27 @@ async function startJLCSeckill() {
       
     const target = listRes.data.seckillGoodsResponseVos.find(item => item.skuCode === CONFIG.targetSku);  
     if(!target) return console.error("❌ 找不到目标商品 SKU，请检查 CONFIG.targetSku");  
+
     const goodsDetailAccessId = target.voucherSeckillActivityDetailAccessId;  
+
     // 2. 时间校准计算  
     const serverTime = new Date(listRes.data.currentTime).getTime();  
     const activityStartTime = new Date(listRes.data.activityBeginTime).getTime();  
+
     const RTT = listReqEnd - listReqStart;  
     const localTimeAtServerSend = listReqEnd - RTT / 2;  
     const timeDelta = serverTime - localTimeAtServerSend;   
       
     const adjustedStartTime = activityStartTime - timeDelta;   
     const trueTimeLeft = adjustedStartTime - Date.now();  
+
     // 3. 显示时间信息  
     console.log(`\\n===== 🕒 时间同步与调度 =====`);  
     console.log(`⏱️ 服务器当前时间: ${new Date(serverTime).toLocaleTimeString('zh-CN', { hour12: false })}.${serverTime % 1000}`);  
     console.log(`⏰ 预期开抢时间: ${new Date(activityStartTime).toLocaleTimeString('zh-CN', { hour12: false })}.${activityStartTime % 1000}`);  
     console.log(`⚙️ 服务器/本地时差 (Server - Local): ${timeDelta.toFixed(0)} ms`);  
     console.log(`=============================`);  
+
     // 4. 定义执行器 (并发)  
     const run = () => {  
         console.log(`🔥 启动并发轰炸！立即发送 ${CONFIG.BURST_COUNT} 个请求...`);  
@@ -524,6 +541,7 @@ async function startJLCSeckill() {
                 .then(handleSuccess)  
                 .catch(e => { /* 忽略网络层面的错误 */ });   
         }  
+
         // 15秒后停止 (检查计时器来停止，以防成功处理失败)  
         setTimeout(() => {  
             if(!stop) {  
@@ -532,6 +550,7 @@ async function startJLCSeckill() {
             }  
         }, 15000);  
     };  
+
     // 5. 倒计时调度  
     if (trueTimeLeft <= CONFIG.leadTime) {  
         run();  
@@ -540,6 +559,7 @@ async function startJLCSeckill() {
         console.log(`⏳ 定时器已设置，将在 ${ (trueTimeLeft - CONFIG.leadTime)/1000 } 秒后启动抢购...`);  
     }  
 }  
+
 // 自动执行自检和抢购  
 (async () => {  
     try {  
@@ -550,24 +570,25 @@ async function startJLCSeckill() {
         console.error("❌ 脚本执行失败:", e.message);  
     }  
 })();
+
 })();
 """
-        # 进行替换
+        # 动态替换配置
         js_script = raw_js_script.replace("REPLACE_ACTIVITY_ID", activity_id)\
                                  .replace("REPLACE_TARGET_SKU", target_sku)
-
+        
         driver.execute_script(js_script)
         log("JS脚本已注入并执行")
-
+        
         # 计算目标时间：当天北京时间10:05，如果已过则第二天
         beijing_tz = pytz.timezone('Asia/Shanghai')
         now = datetime.now(beijing_tz)
         target_time = now.replace(hour=10, minute=5, second=0, microsecond=0)
         if now > target_time:
             target_time += timedelta(days=1)
-
+        
         log(f"程序将等待直到北京时间 {target_time.strftime('%Y-%m-%d %H:%M:%S')} 后退出")
-
+        
         last_logs = []
         while datetime.now(beijing_tz) < target_time:
             # 获取浏览器控制台日志
@@ -579,19 +600,18 @@ async function startJLCSeckill() {
                 last_logs.extend(new_logs)
             except Exception as e:
                 log(f"获取浏览器日志出错: {e}")
-
+            
             time.sleep(1)  # 每秒检查一次
-
+        
         log("已达到北京时间10:05，程序正常退出")
         sys.exit(0)
-
+    
     except Exception as e:
         log(f"❌ 程序执行错误: {e}")
         sys.exit(1)
     finally:
         driver.quit()
         log("浏览器已关闭")
-
 
 if __name__ == "__main__":
     main()
