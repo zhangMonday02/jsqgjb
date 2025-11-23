@@ -12,9 +12,11 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+
 def log(msg):
     full_msg = f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
     print(full_msg, flush=True)
+
 
 def with_retry(func, max_retries=5, delay=1):
     """如果函数返回None或抛出异常，静默重试"""
@@ -30,129 +32,156 @@ def with_retry(func, max_retries=5, delay=1):
         return None
     return wrapper
 
+
 @with_retry
 def extract_token_from_local_storage(driver):
     try:
         token = driver.execute_script("return window.localStorage.getItem('X-JLC-AccessToken');")
         if token:
-            log(f"✅ 成功从 localStorage 提取 token: {token[:30]}...")
+            log(f"成功从 localStorage 提取 token: {token[:30]}...")
             return token
         else:
             alternative_keys = ["x-jlc-accesstoken", "accessToken", "token", "jlc-token"]
             for key in alternative_keys:
                 token = driver.execute_script(f"return window.localStorage.getItem('{key}');")
                 if token:
-                    log(f"✅ 从 localStorage 的 {key} 提取到 token: {token[:30]}...")
+                    log(f"从 localStorage 的 {key} 提取到 token: {token[:30]}...")
                     return token
     except Exception as e:
-        log(f"❌ 从 localStorage 提取 token 失败: {e}")
+        log(f"从 localStorage 提取 token 失败: {e}")
     return None
 
-def get_chrome_options():
-    """统一获取 Chrome 配置，加强防检测"""
+
+@with_retry
+def extract_secretkey_from_devtools(driver):
+    secretkey = None
+    try:
+        logs = driver.get_log('performance')
+        for entry in logs:
+            try:
+                message = json.loads(entry['message'])
+                message_type = message.get('message', {}).get('method', '')
+                if message_type in ('Network.requestWillBeSent', 'Network.responseReceived'):
+                    request_or_response = message.get('message', {}).get('params', {})
+                    if message_type == 'Network.requestWillBeSent':
+                        headers = request_or_response.get('request', {}).get('headers', {})
+                        url = request_or_response.get('request', {}).get('url', '')
+                    else:
+                        headers = request_or_response.get('response', {}).get('requestHeaders', {}) or {}
+                        url = request_or_response.get('response', {}).get('url', '')
+
+                    if 'm.jlc.com' in url:
+                        secretkey = (headers.get('secretkey') or headers.get('SecretKey') or
+                                     headers.get('secretKey') or headers.get('SECRETKEY'))
+                        if secretkey:
+                            log(f"从请求中提取到 secretkey: {secretkey[:20]}...")
+                            return secretkey
+            except:
+                continue
+    except Exception as e:
+        log(f"DevTools 提取 secretkey 出错: {e}")
+    return secretkey
+
+
+def ensure_login_page(driver):
+    max_restarts = 5
+    restarts = 0
+    while restarts < max_restarts:
+        try:
+            driver.get("https://passport.jlc.com/login?appId=JLC_PORTAL_PC&redirectUrl=https%3A%2F%2Fwww.jlc.com%2F&bizExtendedParam=%7B%22jlcGroup_source%22%3A%22jlc%22%7D")
+            log("已打开 JLC 登录页")
+            WebDriverWait(driver, 10).until(lambda d: "passport.jlc.com/login" in d.current_url)
+            if "passport.jlc.com/login" in driver.current_url:
+                log("检测到登录页面")
+                return True
+            else:
+                restarts += 1
+                if restarts < max_restarts:
+                    driver.quit()
+                    driver = _init_driver()
+                    time.sleep(2)
+        except Exception as e:
+            restarts += 1
+            if restarts < max_restarts:
+                try:
+                    driver.quit()
+                except:
+                    pass
+                driver = _init_driver()
+                time.sleep(2)
+            else:
+                log(f"重启浏览器{max_restarts}次后仍出现异常: {e}")
+                return False
+    return False
+
+
+def _init_driver():
+    """统一初始化 Chrome（兼容 Selenium 4.10+）"""
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
-    
-    # 【关键修改1】设置真实浏览器的 User-Agent，去除 Headless 特征
-    chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-    
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_argument("--blink-settings=imagesEnabled=false")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
-    
-    # Selenium 4+ 方式开启日志
+
+    # Selenium 4+ 用 set_capability 方式开启 performance log
     chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL', 'browser': 'ALL'})
-    
-    return chrome_options
 
-def ensure_login_page(driver):
-    """确保进入登录页面，如果未检测到登录页面则重启浏览器"""
-    max_restarts = 5
-    restarts = 0
-    
-    while restarts < max_restarts:
-        try:
-            # 注入反检测脚本
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
-            driver.get("https://passport.jlc.com/login?appId=JLC_PORTAL_PC&redirectUrl=https%3A%2F%2Fwww.jlc.com%2F&bizExtendedParam=%7B%22jlcGroup_source%22%3A%22jlc%22%7D")
-            log("已打开 JLC 登录页")
-            
-            WebDriverWait(driver, 10).until(lambda d: "passport.jlc.com/login" in d.current_url)
-            current_url = driver.current_url
+    driver = webdriver.Chrome(options=chrome_options)
+    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    return driver
 
-            if "passport.jlc.com/login" in current_url:
-                log("✅ 检测到登录页面")
-                return True
-            else:
-                raise Exception("未停留在登录页")
-                    
-        except Exception as e:
-            restarts += 1
-            log(f"⚠️ 无法进入登录页 (尝试 {restarts}/{max_restarts}): {e}")
-            try:
-                driver.quit()
-            except:
-                pass
-            
-            if restarts < max_restarts:
-                options = get_chrome_options()
-                driver = webdriver.Chrome(options=options)
-                time.sleep(2)
-            else:
-                log("❌ 多次重启后仍无法进入登录页面")
-                return False
-    return False
 
 def check_password_error(driver):
-    """检查页面是否显示密码错误提示"""
     try:
         error_selectors = [
             "//*[contains(text(), '账号或密码不正确')]",
             "//*[contains(text(), '用户名或密码错误')]",
             "//*[contains(text(), '密码错误')]",
             "//*[contains(text(), '登录失败')]",
+            "//*[contains(@class, 'error')]",
             "//*[contains(@class, 'err-msg')]",
-            "//*[contains(@class, 'toast')]"
+            "//*[contains(@class, 'toast')]",
+            "//*[contains(@class, 'message')]"
         ]
-        
         for selector in error_selectors:
             try:
-                error_element = WebDriverWait(driver, 1).until(
+                err = WebDriverWait(driver, 2).until(
                     EC.presence_of_element_located((By.XPATH, selector))
                 )
-                if error_element.is_displayed():
-                    log(f"❌ 检测到错误提示: {error_element.text}")
-                    return True
+                if err.is_displayed():
+                    txt = err.text.strip()
+                    if any(k in txt for k in ['账号或密码不正确', '用户名或密码错误', '密码错误', '登录失败']):
+                        log("检测到账号或密码错误")
+                        return True
             except:
                 continue
         return False
-    except Exception:
+    except Exception as e:
+        log(f"检查密码错误时异常: {e}")
         return False
+
 
 def perform_login(driver, username, password):
     wait = WebDriverWait(driver, 25)
-    
+
     if not ensure_login_page(driver):
         return False
 
-    log("正在执行登录流程...")
+    log("检测到登录页面，正在执行登录流程...")
 
     try:
-        phone_btn = wait.until(
-            EC.element_to_be_clickable((By.XPATH, '//button[contains(text(),"账号登录")]'))
-        )
+        phone_btn = wait.until(EC.element_to_be_clickable((By.XPATH, '//button[contains(text(),"账号登录")]')))
         phone_btn.click()
         log("已切换账号登录")
-    except:
-        log("默认可能已是账号登录，继续...")
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//input[@placeholder="请输入手机号码 / 客户编号 / 邮箱"]')))
+    except Exception as e:
+        log(f"账号登录按钮可能已默认选中: {e}")
 
-    # 输入账号密码
     try:
         user_input = wait.until(EC.presence_of_element_located((By.XPATH, '//input[@placeholder="请输入手机号码 / 客户编号 / 邮箱"]')))
         user_input.clear()
@@ -163,162 +192,113 @@ def perform_login(driver, username, password):
         pwd_input.send_keys(password)
         log("已输入账号密码")
     except Exception as e:
-        log(f"❌ 登录输入框未找到: {e}")
+        log(f"登录输入框未找到: {e}")
         return False
 
-    # 点击登录
     try:
         login_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button.submit")))
         login_btn.click()
         log("已点击登录按钮")
     except Exception as e:
-        log(f"❌ 登录按钮定位失败: {e}")
+        log(f"登录按钮定位失败: {e}")
         return False
 
     time.sleep(1)
     if check_password_error(driver):
         return False
 
-    # 处理滑块验证
+    # 滑块验证码
     try:
-        # 检查是否出现滑块（等待时间缩短，如果没有滑块则直接跳过）
-        try:
-            WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".btn_slide")))
-        except:
-            log("未检测到滑块，检查是否已直接跳转...")
-            if "passport.jlc.com" not in driver.current_url:
-                log("✅ 无需滑块，已直接登录成功")
-                return True
-            # 如果还在登录页且没滑块，可能是其他问题，抛出让外层捕获
-            raise Exception("登录页停留且无滑块")
-
-        slider = driver.find_element(By.CSS_SELECTOR, ".btn_slide")
-        track = driver.find_element(By.CSS_SELECTOR, ".nc_scale")
-        
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".btn_slide")))
+        slider = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn_slide")))
+        track = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".nc_scale")))
         track_width = track.size['width']
         slider_width = slider.size['width']
-        move_distance = track_width - slider_width - 5 # 稍微留一点余量
-        
-        log(f"检测到滑块，滑动距离: {move_distance}px")
-        
+        move_distance = track_width - slider_width - 10
+        log(f"检测到滑块验证码，滑动距离: {move_distance}px")
+
         actions = ActionChains(driver)
         actions.click_and_hold(slider).perform()
-        time.sleep(0.2)
-        
-        # 模拟人类轨迹：先快后慢
-        tracks = []
-        current = 0
-        mid = move_distance * 0.75
-        t = 0.2
-        v = 0
-        
-        while current < move_distance:
-            if current < mid:
-                a = 2
-            else:
-                a = -3
-            v0 = v
-            v = v0 + a * t
-            move = v0 * t + 0.5 * a * t * t
-            current += move
-            tracks.append(round(move))
-        
-        # 执行滑动
-        for x in tracks:
-            actions.move_by_offset(x, 0).perform()
-            # 极短的随机停顿
-            # time.sleep(random.uniform(0.005, 0.01)) 
-        
-        # 稍微修正最后的位置
-        actions.move_by_offset(move_distance - sum(tracks), 0).perform()
         time.sleep(0.5)
+
+        quick_distance = int(move_distance * random.uniform(0.6, 0.8))
+        slow_distance = move_distance - quick_distance
+
+        actions.move_by_offset(quick_distance, random.randint(-2, 2)).perform()
+        time.sleep(random.uniform(0.1, 0.3))
+        actions.move_by_offset(slow_distance, random.randint(-2, 2)).perform()
+        time.sleep(random.uniform(0.05, 0.15))
         actions.release().perform()
-        log("滑块拖动完成，等待验证结果...")
-        
-        # 【关键修改2】滑块后可能需要再次点击登录，或者等待自动跳转
-        time.sleep(2)
-        
-        # 如果还在登录页，尝试再次点击登录按钮（防止滑块验证通过但未提交）
-        if "passport.jlc.com" in driver.current_url:
-            log("页面未跳转，尝试再次点击登录按钮...")
-            try:
-                login_btn = driver.find_element(By.CSS_SELECTOR, "button.submit")
-                login_btn.click()
-            except:
-                pass
-        
+        log("滑块拖动完成")
+
+        time.sleep(1)
+        if check_password_error(driver):
+            return False
+
+        WebDriverWait(driver, 10).until(lambda d: "www.jlc.com" in d.current_url and "passport.jlc.com" not in d.current_url)
     except Exception as e:
-        log(f"滑块处理流程异常 (非致命): {e}")
+        log(f"滑块验证处理: {e}")
         time.sleep(1)
         if check_password_error(driver):
             return False
 
     # 等待跳转
     log("等待登录跳转...")
-    max_wait = 20
-    jumped = False
-    for i in range(max_wait):
-        current_url = driver.current_url
-        if "www.jlc.com" in current_url and "passport.jlc.com" not in current_url:
-            log("✅ 成功跳转回首页")
-            jumped = True
-            break
+    for _ in range(15):
+        if "www.jlc.com" in driver.current_url and "passport.jlc.com" not in driver.current_url:
+            log("成功跳转回首页")
+            return True
         time.sleep(1)
-    
-    if not jumped:
-        log(f"❌ 跳转超时，当前URL: {driver.current_url}")
-        return False
+    log(f"跳转超时，当前URL: {driver.current_url}")
+    return False
 
-    return True
 
 def main():
     if len(sys.argv) < 5:
         print("用法: python jlc.py 账号 密码 SKU 活动ID")
+        print("示例: python jlc.py user1 pwd1 SKUJC6 b51c4cf07b794278a79092674af8b563")
         sys.exit(1)
-    
+
     username = sys.argv[1].strip()
     password = sys.argv[2].strip()
     target_sku = sys.argv[3].strip()
     activity_id = sys.argv[4].strip()
-    
-    log(f"🚀 启动任务 | 账号: {username} | 目标SKU: {target_sku}")
-    
-    options = get_chrome_options()
-    driver = webdriver.Chrome(options=options)
-    
-    # 再次确保反检测 JS 被执行
-    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-        "source": """
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            })
-        """
-    })
-    
+
+    log(f"启动任务 | 账号: {username} | 目标SKU: {target_sku} | 活动ID: {activity_id}")
+
+    driver = _init_driver()
+
     try:
         if not perform_login(driver, username, password):
-            log("❌ 登录失败，程序退出")
+            log("登录失败，程序退出")
             sys.exit(1)
-        
+
         driver.get("https://www.jlc.com/portal/anniversary-doubleActivity")
         log("已跳转到活动页面")
         WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        
-        # JS 脚本模板
+        log("页面加载完毕")
+
+        # ==================== 注入 JS 脚本（动态替换 SKU 与 ActivityID） ====================
         raw_js_script = """
 (function() {
 'use strict';
+
+// ================= 配置区域 =================  
 const CONFIG = {  
     activityAccessId: "REPLACE_ACTIVITY_ID",   
     targetSku: "REPLACE_TARGET_SKU",   
     BURST_COUNT: 30,   
     leadTime: 300  
 };  
+
 const URLS = {  
     list: "/api/integral/seckill/ns/getSeckillGoods",  
     buy: "/api/integral/seckill/exchangeSeckillGoods"  
 };  
-console.log(`%c 🚀 嘉立创秒杀脚本已加载 [目标SKU: ${CONFIG.targetSku}]`, "color: #00ff00; font-size:14px;");  
+
+console.log(`%c 嘉立创秒杀脚本 By zhangMonday 已加载 [目标SKU: ${CONFIG.targetSku}]`, "background: #222; color: #00ff00; font-size:14px;");  
+console.log(`已使用活动 ID: ${CONFIG.activityAccessId}`);  
+console.log(`轰炸数量: ${CONFIG.BURST_COUNT} 次`);  
 
 async function fetchJson(url, data) {  
     try {  
@@ -328,112 +308,164 @@ async function fetchJson(url, data) {
             body: JSON.stringify(data)  
         });  
         return await response.json();  
-    } catch (e) { return { error: true, message: e.message }; }  
+    } catch (e) {  
+        return { error: true, message: e.message };  
+    }  
 }  
 
 async function checkSystem() {  
-    console.log("🔍 开始自检...");  
+    console.log("%c 开始系统自检...", "font-weight:bold; font-size:16px; color: #1890ff;");  
     const listPayload = { categoryAccessId: CONFIG.activityAccessId };  
     const listRes = await fetchJson(URLS.list, listPayload);  
-    
+    console.log("列表接口返回:", listRes);  
+
     if (!listRes.data || !listRes.data.seckillGoodsResponseVos) {  
-        throw new Error("❌ 列表获取失败，请检查 activityAccessId 或登录状态");  
+        throw new Error("列表获取失败，请检查 activityAccessId 或登录状态");  
     }  
 
     const target = listRes.data.seckillGoodsResponseVos.find(item => item.skuCode === CONFIG.targetSku);  
-    if (!target) throw new Error(`❌ 未找到 SKU [${CONFIG.targetSku}]`);  
-    console.log(`✅ SKU匹配成功: ${target.skuTitle}`);  
-    return target.voucherSeckillActivityDetailAccessId;
+    if (!target) {  
+        throw new Error(`未找到 SKU 为 [${CONFIG.targetSku}] 的商品。`);  
+    }  
+    console.log(`SKU匹配成功: ${target.skuTitle}`);  
+      
+    console.log("%c[测试] 正在模拟一次抢购请求...", "color: orange");  
+    const buyPayload = {  
+        "goodsDetailAccessId": target.voucherSeckillActivityDetailAccessId,  
+        "categoryAccessId": CONFIG.activityAccessId,  
+        "source": 4  
+    };  
+    const buyRes = await fetchJson(URLS.buy, buyPayload);  
+    console.log("抢购接口返回:", buyRes);  
+    console.log("%c 接口链路通畅，Payload 格式已确认无误。", "color: green; font-weight:bold");  
 }  
 
 function executeSeckill(goodsDetailAccessId) {  
-    return fetchJson(URLS.buy, {  
+    const payload = {  
         "goodsDetailAccessId": goodsDetailAccessId,  
         "categoryAccessId": CONFIG.activityAccessId,  
         "source": 4  
-    });  
+    };  
+    if(!window.hasLoggedPayload) {  
+        console.log("准备发送的最终 Payload:", JSON.stringify(payload));  
+        window.hasLoggedPayload = true;  
+    }  
+    return fetchJson(URLS.buy, payload);  
 }  
 
 async function startJLCSeckill() {  
-    try {
-        const goodsDetailAccessId = await checkSystem();
-        console.log("🚀 准备就绪，开始同步时间...");
-        
-        const listRes = await fetchJson(URLS.list, { categoryAccessId: CONFIG.activityAccessId });
-        const serverTime = new Date(listRes.data.currentTime).getTime();  
-        const activityStartTime = new Date(listRes.data.activityBeginTime).getTime();  
-        
-        // 简单的时间校准
-        const timeDelta = serverTime - Date.now();
-        const adjustedStartTime = activityStartTime - timeDelta;
-        const trueTimeLeft = adjustedStartTime - Date.now();
+    console.log("启动正式抢购流程...");  
+    const listPayload = { categoryAccessId: CONFIG.activityAccessId };  
+    const listReqStart = Date.now();  
+    const listRes = await fetchJson(URLS.list, listPayload);  
+    const listReqEnd = Date.now();  
 
-        console.log(`⏰ 距离开抢还有: ${trueTimeLeft} ms`);
+    if(!listRes.data) return console.error("无法获取列表");  
 
-        const run = () => {  
-            console.log(`🔥 立即发送 ${CONFIG.BURST_COUNT} 个请求!`);  
-            let stop = false;  
-            let successCount = 0;
-            
-            for (let i = 0; i < CONFIG.BURST_COUNT; i++) {  
-                if (stop) break;  
-                executeSeckill(goodsDetailAccessId).then(res => {
-                    if (res.code === 200 && res.success) {
-                        stop = true;
-                        console.log("%c 🎉 抢购成功！", "color: red; font-size: 20px;");
-                    }
-                });
+    const target = listRes.data.seckillGoodsResponseVos.find(item => item.skuCode === CONFIG.targetSku);  
+    if(!target) return console.error("找不到目标商品 SKU");  
+
+    const goodsDetailAccessId = target.voucherSeckillActivityDetailAccessId;  
+
+    const serverTime = new Date(listRes.data.currentTime).getTime();  
+    const activityStartTime = new Date(listRes.data.activityBeginTime).getTime();  
+    const RTT = listReqEnd - listReqStart;  
+    const localTimeAtServerSend = listReqEnd - RTT / 2;  
+    const timeDelta = serverTime - localTimeAtServerSend;   
+    const adjustedStartTime = activityStartTime - timeDelta;   
+    const trueTimeLeft = adjustedStartTime - Date.now();  
+
+    console.log(`\\n===== 时间同步与调度 =====`);  
+    console.log(`服务器当前时间: ${new Date(serverTime).toLocaleTimeString('zh-CN', { hour12: false })}.${serverTime % 1000}`);  
+    console.log(`预期开抢时间: ${new Date(activityStartTime).toLocaleTimeString('zh-CN', { hour12: false })}.${activityStartTime % 1000}`);  
+    console.log(`服务器/本地时差: ${timeDelta.toFixed(0)} ms`);  
+    console.log(`=============================`);  
+
+    const run = () => {  
+        console.log(`启动并发轰炸！立即发送 ${CONFIG.BURST_COUNT} 个请求...`);  
+        let stop = false;  
+        let count = 0;  
+        const handleSuccess = (res) => {  
+            if (res.code === 200 && res.success && !stop) {  
+                stop = true;  
+                setTimeout(() => {  
+                    console.log(`%c 牛逼抢到了！总共发送 ${count} 次请求！`, "font-size: 30px; color: red; font-weight: bold;");  
+                    alert("抢购成功！");  
+                }, 50);   
             }  
         };  
 
-        if (trueTimeLeft <= CONFIG.leadTime) {  
-            run();  
-        } else {  
-            setTimeout(run, trueTimeLeft - CONFIG.leadTime);  
-        }
-    } catch(e) {
-        console.error(e.message);
-    }
+        for (let i = 0; i < CONFIG.BURST_COUNT; i++) {  
+            if (stop) break;  
+            count++;  
+            executeSeckill(goodsDetailAccessId).then(handleSuccess).catch(() => {});   
+        }  
+
+        setTimeout(() => {  
+            if(!stop) {  
+                stop = true;  
+                console.log(`停止请求（超时保护）。共计尝试发送 ${count} 次请求。没显示成功就是没抢到`);  
+            }  
+        }, 15000);  
+    };  
+
+    if (trueTimeLeft <= CONFIG.leadTime) {  
+        run();  
+    } else {  
+        setTimeout(run, trueTimeLeft - CONFIG.leadTime);  
+        console.log(`定时器已设置，将在 ${(trueTimeLeft - CONFIG.leadTime)/1000} 秒后启动抢购...`);  
+    }  
 }  
 
-startJLCSeckill();
+(async () => {  
+    try {  
+        await checkSystem();  
+        console.log("%c 自检通过，自动启动抢购流程...", "color: green; font-weight:bold");  
+        await startJLCSeckill();  
+    } catch (e) {  
+        console.error("脚本执行失败:", e.message);  
+    }  
+})();
 })();
 """
+
         js_script = raw_js_script.replace("REPLACE_ACTIVITY_ID", activity_id)\
                                  .replace("REPLACE_TARGET_SKU", target_sku)
-        
+
         driver.execute_script(js_script)
-        log("JS脚本已注入并执行")
-        
+        log("JS脚本已注入并开始执行")
+
+        # 等待到北京时间 10:05（活动时间）后自动退出
         beijing_tz = pytz.timezone('Asia/Shanghai')
         now = datetime.now(beijing_tz)
         target_time = now.replace(hour=10, minute=5, second=0, microsecond=0)
-        if now > target_time:
+        if now >= target_time:
             target_time += timedelta(days=1)
-        
-        log(f"程序将等待直到 {target_time.strftime('%H:%M:%S')} 后退出")
-        
+
+        log(f"程序将等待直到北京时间 {target_time.strftime('%Y-%m-%d %H:%M:%S')} 后退出")
+
         last_logs = []
         while datetime.now(beijing_tz) < target_time:
             try:
                 browser_logs = driver.get_log('browser')
-                new_logs = [entry for entry in browser_logs if entry not in last_logs]
+                new_logs = [e for e in browser_logs if e not in last_logs]
                 for entry in new_logs:
-                    log(f"浏览器: {entry['message']}")
+                    log(f"浏览器控制台: {entry['message']}")
                 last_logs.extend(new_logs)
-            except:
-                pass
+            except Exception as e:
+                log(f"获取浏览器日志出错: {e}")
             time.sleep(1)
-        
-        log("程序正常退出")
+
+        log("已到达北京时间10:05，程序正常退出")
         sys.exit(0)
-    
+
     except Exception as e:
-        log(f"❌ 程序执行错误: {e}")
+        log(f"程序执行错误: {e}")
         sys.exit(1)
     finally:
         driver.quit()
         log("浏览器已关闭")
+
 
 if __name__ == "__main__":
     main()
