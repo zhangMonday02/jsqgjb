@@ -65,10 +65,10 @@ jobs:
         env:
           # 也可以在这里把参数映射为环境变量
           USER: ${{ matrix.account.username }}
-          PWD: ${{ matrix.account.password }}
+          PASSWORD: ${{ matrix.account.password }}
           SKU: ${{ matrix.account.sku }}
           ACT_ID: ${{ matrix.account.activity_id }}
         run: |
           echo "正在启动任务：用户 $USER 目标 $SKU"
           # 将参数传递给 Python 脚本
-          python ./jlc.py "$USER" "$PWD" "$SKU" "$ACT_ID"
+          python ./jlc.py "$USER" "$PASSWORD" "$SKU" "$ACT_ID"
