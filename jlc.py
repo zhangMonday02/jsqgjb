@@ -384,10 +384,10 @@ def main():
             log("❌ 登录失败，程序退出")
             sys.exit(1)
         
-        # 计算北京时间9:58的目标时间，如果已过则第二天
+        # 计算北京时间9:57的目标时间，如果已过则第二天
         beijing_tz = pytz.timezone('Asia/Shanghai')
         now = datetime.now(beijing_tz)
-        target_open_time = now.replace(hour=9, minute=58, second=0, microsecond=0)
+        target_open_time = now.replace(hour=9, minute=57, second=0, microsecond=0)
         if now > target_open_time:
             target_open_time += timedelta(days=1)
         
