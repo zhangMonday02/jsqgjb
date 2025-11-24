@@ -1,128 +1,122 @@
 [
-  {
-    "username": "9138613A",
-    "password": "Zz123123",
-    "sku": "SKUJC6",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "9138627A",
-    "password": "Zz123123",
-    "sku": "SKUJC6",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "9156063A",
-    "password": "Aa123123",
-    "sku": "SKUJC6",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "915635S",
-    "password": "qeowowe5472",
-    "sku": "SKUJC6",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "10787521A",
-    "password": "Aa123123",
-    "sku": "SKUJC6",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "10850244A",
-    "password": "Aa123123",
-    "sku": "SKUJC6",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "10850250A",
-    "password": "Aa123123",
-    "sku": "SKUJC6",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "10947157A",
-    "password": "Aa123123",
-    "sku": "SKUJCP",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "10947124A",
-    "password": "Aa123123",
-    "sku": "SKUJCP",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "10947190A",
-    "password": "Aa123123",
-    "sku": "SKUJCP",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "10947345A",
-    "password": "Aa123123",
-    "sku": "SKUJCP",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "10947388A",
-    "password": "Aa123123",
-    "sku": "SKUJCP",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "10947397A",
-    "password": "Aa123123",
-    "sku": "SKUJCP",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "8959441A",
-    "password": "Aa123123",
-    "sku": "SKUJIQ",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "9297381A",
-    "password": "Aa123123",
-    "sku": "SKUJIQ",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "9297379A",
-    "password": "Aa123123",
-    "sku": "SKUJIQ",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "9296814A",
-    "password": "Aa123123",
-    "sku": "SKUJIQ",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "9296473A",
-    "password": "Aa123123",
-    "sku": "SKUJIQ",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "9176533A",
-    "password": "Aa123123",
-    "sku": "SKUJIQ",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "8774619A",
-    "password": "Zz123123",
-    "sku": "SKUJIQ",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  },
-  {
-    "username": "9177688A",
-    "password": "Zz123123",
-    "sku": "SKUJIQ",
-    "activity_id": "b51c4cf07b794278a79092674af8b563"
-  }
+{
+"username": "9138613A",
+"password": "Zz123123",
+"sku": "SKUJC6",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "9138627A",
+"password": "Zz123123",
+"sku": "SKUJC6",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "9156063A",
+"password": "Aa123123",
+"sku": "SKUJC6",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "915635S",
+"password": "qeowowe5472",
+"sku": "SKUJC6",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "10787521A",
+"password": "Aa123123",
+"sku": "SKUJC6",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "10850244A",
+"password": "Aa123123",
+"sku": "SKUJC6",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "10850250A",
+"password": "Aa123123",
+"sku": "SKUJCP",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "10947157A",
+"password": "Aa123123",
+"sku": "SKUJCP",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "10947124A",
+"password": "Aa123123",
+"sku": "SKUJCP",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "10947190A",
+"password": "Aa123123",
+"sku": "SKUJCP",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "10947345A",
+"password": "Aa123123",
+"sku": "SKUJCP",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "10947388A",
+"password": "Aa123123",
+"sku": "SKUJCP",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "8959441A",
+"password": "Aa123123",
+"sku": "SKUJIQ",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "9297381A",
+"password": "Aa123123",
+"sku": "SKUJIQ",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "9297379A",
+"password": "Aa123123",
+"sku": "SKUJIQ",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "9296814A",
+"password": "Aa123123",
+"sku": "SKUJIQ",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "9296473A",
+"password": "Aa123123",
+"sku": "SKUJIQ",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "9176533A",
+"password": "Aa123123",
+"sku": "SKUJIQ",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "8774619A",
+"password": "Zz123123",
+"sku": "SKUJIQ",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+},
+{
+"username": "9177688A",
+"password": "Zz123123",
+"sku": "SKUJIQ",
+"activity_id": "b51c4cf07b794278a79092674af8b563"
+}
 ]
