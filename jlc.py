@@ -582,8 +582,8 @@ async function startJLCSeckill() {
 
     // 3. 显示时间信息  
     console.log(`\\n===== 🕒 时间同步与调度 =====`);  
-    console.log(`⏱️ 服务器当前时间: ${new Date(serverTime).toLocaleTimeString('zh-CN', { hour12: false })}.${serverTime % 1000}`);  
-    console.log(`⏰ 预期开抢时间: ${new Date(activityStartTime).toLocaleTimeString('zh-CN', { hour12: false })}.${activityStartTime % 1000}`);  
+    console.log(`⏱️ 服务器当前时间: \( {new Date(serverTime).toLocaleTimeString('zh-CN', { hour12: false })}. \){serverTime % 1000}`);  
+    console.log(`⏰ 预期开抢时间: \( {new Date(activityStartTime).toLocaleTimeString('zh-CN', { hour12: false })}. \){activityStartTime % 1000}`);  
     console.log(`⚙️ 服务器/本地时差 (Server - Local): ${timeDelta.toFixed(0)} ms`);  
     console.log(`=============================`);  
 
@@ -591,6 +591,7 @@ async function startJLCSeckill() {
     const run = () => {  
         console.log(`🔥 启动并发轰炸！立即发送 ${CONFIG.BURST_COUNT} 个请求...`);  
         let stop = false;  
+        let pending = 0;  
         let count = 0;  
           
         // Success handler for all concurrent Promises  
@@ -605,22 +606,42 @@ async function startJLCSeckill() {
             }  
         };  
           
-        // 发送请求突发循环 (Fire and Forget)  
-        for (let i = 0; i < CONFIG.BURST_COUNT; i++) {  
-            if (stop) break;  
+        const sendRequest = () => {  
+            if (stop) return;  
             count++;  
-              
+            pending++;  
             executeSeckill(goodsDetailAccessId)  
-                .then(handleSuccess)  
-                .catch(e => { /* 忽略网络层面的错误 */ });   
+                .then((res) => {  
+                    handleSuccess(res);  
+                    return res;  
+                })  
+                .catch(() => {})  
+                .finally(() => {  
+                    pending--;  
+                });  
+        };  
+          
+        // 发送初始请求突发  
+        for (let i = 0; i < CONFIG.BURST_COUNT; i++) {  
+            sendRequest();  
         }  
-
+          
+        // 每5ms检查并补位失败/完成的请求，保持并发量  
+        const checkInterval = setInterval(() => {  
+            if (stop) {  
+                clearInterval(checkInterval);  
+                return;  
+            }  
+            while (pending < CONFIG.BURST_COUNT) {  
+                sendRequest();  
+            }  
+        }, 5);  
+          
         // 15秒后停止 (检查计时器来停止，以防成功处理失败)  
         setTimeout(() => {  
-            if(!stop) {  
-                stop = true;  
-                console.log(`🛑 停止请求（超时保护）。共计尝试发送 ${count} 次请求。没显示牛逼抢到了就是妹成功，哎`);  
-            }  
+            stop = true;  
+            clearInterval(checkInterval);  
+            console.log(`🛑 停止请求（超时保护）。共计尝试发送 ${count} 次请求。没显示牛逼抢到了就是妹成功，哎`);  
         }, 15000);  
     };  
 
